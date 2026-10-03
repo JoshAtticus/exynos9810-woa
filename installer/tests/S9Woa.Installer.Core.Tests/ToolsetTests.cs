@@ -148,8 +148,10 @@ public sealed class ToolsetTests : IDisposable
 
         var wrongModel = Touch(Path.Combine(_root, "twrp-3.7.0_9-0-star2qlte.img"), BootImageBytes());
         Assert.NotNull(BootImage.ValidateTwrp(wrongModel));
+        var snapdragonS9 = Touch(Path.Combine(_root, "twrp-3.7.0_9-0-starqlte.img"), BootImageBytes());
+        Assert.NotNull(BootImage.ValidateTwrp(snapdragonS9));
         var s9 = Touch(Path.Combine(_root, "twrp-3.7.0_9-0-starlte.img"), BootImageBytes());
-        Assert.NotNull(BootImage.ValidateTwrp(s9));
+        Assert.Null(BootImage.ValidateTwrp(s9));
 
         var notBoot = Touch(Path.Combine(_root, "x-star2lte.img"), new byte[8192]);
         Assert.Contains("ANDROID!", BootImage.ValidateTwrp(notBoot));

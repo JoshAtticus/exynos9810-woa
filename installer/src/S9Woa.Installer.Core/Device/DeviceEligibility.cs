@@ -8,7 +8,10 @@ public sealed record SupportedTarget(string Model, string ModelCode, string Code
     public static SupportedTarget GalaxyS9Plus { get; } =
         new("SM-G965F", "G965F", "star2lte", "exynos9810", "G965FXXUHFVG4");
 
-    public static IReadOnlyList<SupportedTarget> All { get; } = [GalaxyS9Plus];
+    public static SupportedTarget GalaxyS9 { get; } =
+        new("SM-G960F", "G960F", "starlte", "exynos9810", "G960FXXUHFVG6");
+
+    public static IReadOnlyList<SupportedTarget> All { get; } = [GalaxyS9Plus, GalaxyS9];
 }
 
 public static class DeviceEligibility
@@ -41,8 +44,8 @@ public static class DeviceEligibility
             results.Add(new("model", "Phone model", CheckSeverity.Blocker,
                 $"{d.Model ?? "Unknown model"} is not supported.",
                 isS9Family
-                    ? "Only the Exynos Galaxy S9+ (SM-G965F) is supported today. Snapdragon models and the S9 (SM-G960F) are not."
-                    : "This installer only supports the Samsung Galaxy S9+ (SM-G965F)."));
+                    ? "Only the Exynos Galaxy S9 (SM-G960F) and S9+ (SM-G965F) are supported today. Snapdragon models are not."
+                    : "This installer only supports the Exynos Samsung Galaxy S9 (SM-G960F) and S9+ (SM-G965F)."));
             return results;
         }
         results.Add(new("model", "Phone model", CheckSeverity.Pass, $"{target.Model} ({target.Codename})"));

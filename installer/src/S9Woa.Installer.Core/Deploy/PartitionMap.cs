@@ -2,9 +2,11 @@
 namespace S9Woa.Installer.Core.Deploy;
 
 /// <summary>
-/// The validated Galaxy S9+ (star2lte) partition layout the installer relies on.
-/// Names are the stable <c>/dev/block/by-name</c> links (upper case on this phone;
-/// lookups are case-insensitive), independent of the sd* node numbering.
+/// The validated Exynos Galaxy S9/S9+ partition layout the installer relies on.
+/// PIT-verified identical on starlte (SM-G960F, STARLTE_EUR_OPEN.pit) and star2lte:
+/// same names, same block counts, same USERDATA offset. Names are the stable
+/// <c>/dev/block/by-name</c> links (upper case on this phone; lookups are
+/// case-insensitive), independent of the sd* node numbering.
 /// </summary>
 public static class PartitionMap
 {
@@ -53,7 +55,7 @@ public static class PartitionMap
 
     /// <summary>
     /// Samsung derives GPT identifiers from names ("ANDROID MMC DISK", "ANDROID USERDATA", ...),
-    /// so they are the same on every star2lte. The BCD addresses Windows by them.
+    /// so they are the same on every starlte/star2lte. The BCD addresses Windows by them.
     /// </summary>
     public const string DiskGuid = "{52444e41-494f-2044-4d4d-43204449534b}";
     public const string UserdataGuid = "{52444e41-494f-2044-5553-455244415441}";

@@ -13,16 +13,29 @@ public class BootChainTests : IDisposable
 
     public void Dispose() => Directory.Delete(_root, recursive: true);
 
-    private string WriteCatalog(string dir, params (string File, string Windows, string[] Media, string Loader, string Kernel)[] images)
+    private string WriteCatalog(string dir, params (string File, string Windows, string[] Media, string Loader, string Kernel, string? Device)[] images)
     {
         Directory.CreateDirectory(dir);
         var entries = new List<object>();
-        foreach (var (file, windows, media, loader, kernel) in images)
+        foreach (var (file, windows, media, loader, kernel, device) in images)
         {
             var bytes = new byte[4096];
             new Random(file.Length).NextBytes(bytes);
             File.WriteAllBytes(Path.Combine(dir, file), bytes);
-            entries.Add(new { file, sha256 = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant(), windows, mediaBuilds = media, loaderSha256 = loader, kernelSha256 = kernel });
+            var entry = new Dictionary<string, object>
+            {
+                ["file"] = file,
+                ["sha256"] = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant(),
+                ["windows"] = windows,
+                ["mediaBuilds"] = media,
+                ["loaderSha256"] = loader,
+                ["kernelSha256"] = kernel,
+            };
+            if (device is not null)
+            {
+                entry["device"] = device;
+            }
+            entries.Add(entry);
         }
         File.WriteAllText(Path.Combine(dir, FirmwareCatalog.FileName),
             JsonSerializer.Serialize(new { schema = FirmwareCatalog.Schema, images = entries }));
@@ -33,8 +46,8 @@ public class BootChainTests : IDisposable
     public void FirmwareIsChosenByTheExactLoaderAndKernel()
     {
         var dir = WriteCatalog(Path.Combine(_root, "uefi"),
-            ("a.img", "22621.2428", ["22631.2428"], "aa", "ka"),
-            ("b.img", "22621.7582", ["22631.7584"], "bb", "kb"));
+            ("a.img", "22621.2428", ["22631.2428"], "aa", "ka", null),
+            ("b.img", "22621.7582", ["22631.7584"], "bb", "kb", null));
         var catalog = FirmwareCatalog.Load(dir)!;
 
         Assert.Equal("a.img", catalog.ForBootFiles("AA", "KA")!.File);
@@ -53,8 +66,8 @@ public class BootChainTests : IDisposable
     public void AnyWindowsBuildGetsAFirmwareExactOrNearest()
     {
         var dir = WriteCatalog(Path.Combine(_root, "any"),
-            ("a.img", "22621.2428", ["22631.2428"], "aa", "ka"),
-            ("b.img", "22621.7582", ["22631.7584"], "bb", "kb"));
+            ("a.img", "22621.2428", ["22631.2428"], "aa", "ka", null),
+            ("b.img", "22621.7582", ["22631.7584"], "bb", "kb", null));
         var catalog = FirmwareCatalog.Load(dir)!;
 
         // Exact: the image built for this loader/kernel, or a listed media build before the image exists.
@@ -72,9 +85,39 @@ public class BootChainTests : IDisposable
     }
 
     [Fact]
+    public void FirmwareIsChosenPerDevice()
+    {
+        var dir = WriteCatalog(Path.Combine(_root, "dev"),
+            ("s9.img", "22621.2428", [], "aa", "ka", "starlte"),
+            ("s9plus.img", "22621.2428", [], "aa", "ka", "star2lte"));
+        var catalog = FirmwareCatalog.Load(dir)!;
+        Assert.Equal("starlte", catalog.Images[0].Device);
+        Assert.Equal("star2lte", catalog.Images[1].Device);
+
+        Assert.Equal("s9.img", catalog.Choose("22621.2428", "aa", "ka", "starlte")!.Image.File);
+        Assert.Equal("s9plus.img", catalog.Choose("22621.2428", "aa", "ka", "star2lte")!.Image.File);
+        Assert.True(catalog.Choose("22621.2428", "aa", "ka", "starlte")!.Exact);
+        // No image for an unknown model.
+        Assert.Null(catalog.Choose("22621.2428", "aa", "ka", "starqlte"));
+        // No device filter: legacy behaviour, first match wins.
+        Assert.Equal("s9.img", catalog.Choose("22621.2428", "aa", "ka")!.Image.File);
+    }
+
+    [Fact]
+    public void LegacyCatalogEntriesDefaultToStar2lte()
+    {
+        var dir = WriteCatalog(Path.Combine(_root, "legacy"),
+            ("a.img", "22621.2428", [], "aa", "ka", null));
+        var catalog = FirmwareCatalog.Load(dir)!;
+        Assert.Equal("star2lte", catalog.Images[0].Device);
+        Assert.Equal("a.img", catalog.Choose("22621.2428", "aa", "ka", "star2lte")!.Image.File);
+        Assert.Null(catalog.Choose("22621.2428", "aa", "ka", "starlte"));
+    }
+
+    [Fact]
     public void CatalogRefusesTamperedImagesAndEscapes()
     {
-        var dir = WriteCatalog(Path.Combine(_root, "t"), ("a.img", "22621.2428", [], "aa", "ka"));
+        var dir = WriteCatalog(Path.Combine(_root, "t"), ("a.img", "22621.2428", [], "aa", "ka", null));
         File.WriteAllBytes(Path.Combine(dir, "a.img"), new byte[4096]);
         var catalog = FirmwareCatalog.Load(dir)!;
         Assert.False(catalog.Verify(catalog.Images[0]));

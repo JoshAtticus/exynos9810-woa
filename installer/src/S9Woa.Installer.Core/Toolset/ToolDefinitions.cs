@@ -85,9 +85,9 @@ public static class Tools
         new(DownloadModeDriver, "Download-mode USB driver for Heimdall",
             "Only for the Heimdall fallback: a one-time Zadig step while the phone is in Download mode.",
             ToolKind.Driver, false, ToolSource.Launch),
-        new(Twrp, "TWRP recovery for star2lte",
+        new(Twrp, "TWRP recovery for starlte/star2lte",
             "The recovery the installer boots to back up the phone and write Windows. Choose the official "
-            + "twrp-3.7.0_9-0-star2lte.img; the installer turns it into a Windows Recovery-style recovery on this PC.",
+            + "twrp-3.7.0_9-0-starlte.img (S9) or -star2lte.img (S9+); the installer turns it into a Windows Recovery-style recovery on this PC.",
             ToolKind.Payload, true, ToolSource.OpenPage | ToolSource.PickFile, PageUrl: TwrpPage, FilePattern: "*.img"),
         new(Uefi, "UEFI firmware image",
             "The open-source UEFI that boots Windows, written to the BOOT partition.",

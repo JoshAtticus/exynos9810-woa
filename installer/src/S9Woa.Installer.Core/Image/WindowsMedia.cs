@@ -32,9 +32,13 @@ public sealed partial class WindowsMedia
     /// </summary>
     internal static string MountIsoScript(string iso) => string.Join("\n",
         "$ErrorActionPreference = 'Stop'",
-        $"$img = Get-DiskImage -ImagePath {Quote(iso)}",
+        "$img = Get-DiskImage -ImagePath " + Quote(iso),
         "$mine = 0",
-        "if (-not $img.Attached) { $img = Mount-DiskImage -InputObject $img -Access ReadOnly -StorageType ISO -PassThru; $mine = 1 }",
+        "if (-not $img.Attached) {",
+        "    # -InputObject is not a valid parameter set here; Mount-DiskImage binds by path.",
+        "    $img = Mount-DiskImage -ImagePath " + Quote(iso) + " -Access ReadOnly -StorageType ISO -PassThru",
+        "    $mine = 1",
+        "}",
         "$letter = ($img | Get-Volume).DriveLetter",
         "if (-not $letter) { throw 'The ISO has no drive letter.' }",
         "Write-Output \"$letter $mine\"");

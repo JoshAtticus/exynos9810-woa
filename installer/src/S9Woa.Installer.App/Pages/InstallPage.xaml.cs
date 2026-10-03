@@ -584,7 +584,7 @@ public sealed partial class InstallPage : Page, IWizardStep
             AppServices.Unattend, outDir, log, ct);
         AppServices.Built = built;
         var firmwareNote = "";
-        if (AppServices.Toolset.LoadFirmwareCatalog() is { } catalog && catalog.Choose(AppServices.MediaBuild, built.LoaderSha256, built.KernelSha256) is { } firmware)
+        if (AppServices.Toolset.LoadFirmwareCatalog() is { } catalog && catalog.Choose(AppServices.MediaBuild, built.LoaderSha256, built.KernelSha256, AppServices.CurrentDevice?.Codename) is { } firmware)
         {
             AppServices.State.FirmwareFile = firmware.Image.File;
             AppServices.SaveState();
@@ -702,11 +702,12 @@ public sealed partial class InstallPage : Page, IWizardStep
         var note = "";
         if (AppServices.Toolset.LoadFirmwareCatalog() is { } catalog)
         {
+            var device = AppServices.CurrentDevice?.Codename;
             var firmware = catalog.Images.FirstOrDefault(i => i.File == AppServices.State.FirmwareFile)
-                ?? catalog.Choose(AppServices.MediaBuild, AppServices.Built?.LoaderSha256, AppServices.Built?.KernelSha256)?.Image;
+                ?? catalog.Choose(AppServices.MediaBuild, AppServices.Built?.LoaderSha256, AppServices.Built?.KernelSha256, device)?.Image;
             if (firmware is null)
             {
-                return (false, "The UEFI catalog has no images. Import the UEFI images again on the Set up page, then press Resume.");
+                return (false, $"The UEFI catalog has no images for {device ?? "this phone"}. Import the UEFI images again on the Set up page, then press Resume.");
             }
             if (!catalog.Verify(firmware))
             {

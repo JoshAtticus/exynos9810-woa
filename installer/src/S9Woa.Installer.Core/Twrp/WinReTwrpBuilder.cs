@@ -8,7 +8,7 @@ namespace S9Woa.Installer.Core.Twrp;
 /// <summary>What a candidate base image is, so callers can decide how to treat it.</summary>
 public enum BaseImageKind
 {
-    /// <summary>The official TWRP 3.7.0_9-0 for star2lte, ready to build from.</summary>
+    /// <summary>An official TWRP 3.7.0_9-0 for starlte (S9) or star2lte (S9+), ready to build from.</summary>
     OfficialTwrp,
 
     /// <summary>Already a WinRE build (from us or the research tool); flash as-is.</summary>
@@ -65,6 +65,12 @@ public sealed class WinReTwrpBuilder
 
     /// <summary>Length of that official file (its last section ends here, no partition padding).</summary>
     public const int OfficialTwrpBytes = 42_670_080;
+
+    /// <summary>SHA-256 of the official twrp-3.7.0_9-0-starlte.img from twrp.me.</summary>
+    public const string OfficialTwrpStarlteSha256 = "905f81903849a5b981fe8915c91d2ba025358f79324e2427c2b704a4f9e46a4e";
+
+    /// <summary>Length of that official file (its last section ends here, no partition padding).</summary>
+    public const int OfficialTwrpStarlteBytes = 42_665_984;
 
     private const int ModuleDirMode = 0x1FF; // directory 0755 handled by cpio; files 0644.
     private const string ModulePath = "sbin/s9woa";
@@ -157,25 +163,48 @@ public sealed class WinReTwrpBuilder
         }
     }
 
-    public static bool MatchesOfficial(byte[] image)
+    public static bool MatchesOfficial(byte[] image) => MatchesOfficial(image, out _);
+
+    public static bool MatchesOfficial(byte[] image, out string codename)
     {
         ArgumentNullException.ThrowIfNull(image);
-        if (Sha256(image) == OfficialTwrpSha256)
+        var sha = Sha256(image);
+        if (sha == OfficialTwrpSha256)
         {
+            codename = "star2lte";
+            return true;
+        }
+        if (sha == OfficialTwrpStarlteSha256)
+        {
+            codename = "starlte";
             return true;
         }
         // Accept a partition dump padded with zeros to the RECOVERY size whose
-        // leading OfficialTwrpBytes are the official image and the rest is zero.
-        if (image.Length <= OfficialTwrpBytes)
+        // leading bytes are an official image and the rest is zero.
+        foreach (var (knownSha, knownBytes, name) in new[]
+                 {
+                     (OfficialTwrpSha256, OfficialTwrpBytes, "star2lte"),
+                     (OfficialTwrpStarlteSha256, OfficialTwrpStarlteBytes, "starlte"),
+                 })
         {
-            return false;
+            if (image.Length > knownBytes
+                && !image.AsSpan(knownBytes).ContainsAnyExcept((byte)0)
+                && Sha256(image.AsSpan(0, knownBytes).ToArray()) == knownSha)
+            {
+                codename = name;
+                return true;
+            }
         }
-        return !image.AsSpan(OfficialTwrpBytes).ContainsAnyExcept((byte)0)
-            && Sha256(image.AsSpan(0, OfficialTwrpBytes).ToArray()) == OfficialTwrpSha256;
+        codename = "";
+        return false;
     }
 
-    private static byte[] OfficialPayload(byte[] image) =>
-        image.Length == OfficialTwrpBytes ? image : image.AsSpan(0, OfficialTwrpBytes).ToArray();
+    private static byte[] OfficialPayload(byte[] image)
+    {
+        MatchesOfficial(image, out var codename);
+        var knownBytes = codename == "starlte" ? OfficialTwrpStarlteBytes : OfficialTwrpBytes;
+        return image.Length == knownBytes ? image : image.AsSpan(0, knownBytes).ToArray();
+    }
 
     /// <summary>
     /// Build the WinRE recovery image. <paramref name="fontsDirectory"/> defaults
@@ -189,11 +218,11 @@ public sealed class WinReTwrpBuilder
     {
         ArgumentNullException.ThrowIfNull(baseImage);
         var baseSha = Sha256(baseImage);
-        if (!MatchesOfficial(baseImage))
+        if (!MatchesOfficial(baseImage, out var baseCodename))
         {
             throw new InvalidOperationException(
-                "This is not the official TWRP 3.7.0_9-0 for star2lte (checked by SHA-256). "
-                + "Download twrp-3.7.0_9-0-star2lte.img from twrp.me and choose it on the Set up page.");
+                "This is not the official TWRP 3.7.0_9-0 for starlte/star2lte (checked by SHA-256). "
+                + "Download twrp-3.7.0_9-0-starlte.img (S9) or -star2lte.img (S9+) from twrp.me and choose it on the Set up page.");
         }
         var raw = OfficialPayload(baseImage);
         fontsDirectory ??= DefaultFontsDirectory;
@@ -211,7 +240,9 @@ public sealed class WinReTwrpBuilder
             throw new InvalidOperationException("Recovery partition tail is not zero fill; not safe to re-pad.");
         }
 
-        // Power-off route patch (kernel; hash/pattern gated).
+        // Power-off route patch (kernel; hash/signature gated per device: the
+        // star2lte and starlte kernels compile sec_power_off differently, so
+        // each has its own derived offsets in PowerOffRoutePatch).
         boot.Kernel = PowerOffRoutePatch.Patch(boot.Kernel);
         report?.Add("kernel: power-off route patched (4 bytes)");
 

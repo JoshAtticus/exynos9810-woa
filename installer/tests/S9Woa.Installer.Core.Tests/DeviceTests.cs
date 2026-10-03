@@ -40,7 +40,7 @@ public class DeviceTests
     public void DownloadModeContinuesAsThePhoneIdentifiedEarlier()
     {
         Assert.Null(DeviceSnapshot.InDownloadMode(null, "G965FXXUHFVG4"));          // never identified
-        Assert.Null(DeviceSnapshot.InDownloadMode("aa11bb22cc33dd44", "G960FXXU9FVB1")); // not a supported model
+        Assert.Null(DeviceSnapshot.InDownloadMode("aa11bb22cc33dd44", "G965UXXU9FVB1")); // not a supported model (Snapdragon)
         var phone = DeviceSnapshot.InDownloadMode("aa11bb22cc33dd44", "G965FXXUHFVG4")!;
         Assert.Equal(DeviceMode.Download, phone.Mode);
         Assert.Equal("SM-G965F", phone.Model);
@@ -79,10 +79,32 @@ public class DeviceTests
     [Fact]
     public void RejectsOtherModelsAndUnauthorized()
     {
-        Assert.True(DeviceEligibility.Evaluate(Snap(model: "SM-G960F")).HasBlockers());
         Assert.True(DeviceEligibility.Evaluate(Snap(model: "SM-G965U")).HasBlockers());
+        Assert.True(DeviceEligibility.Evaluate(Snap(model: "SM-A546B")).HasBlockers());
         Assert.True(DeviceEligibility.Evaluate(Snap(mode: DeviceMode.Unauthorized)).HasBlockers());
         Assert.False(DeviceEligibility.Evaluate(Snap()).HasBlockers());
+    }
+
+    [Fact]
+    public void AcceptsTheBaseGalaxyS9()
+    {
+        var phone = DeviceSnapshot.InDownloadMode("aa11bb22cc33dd44", "G960FXXUHFVG6")!;
+        Assert.Equal("SM-G960F", phone.Model);
+        Assert.Equal("starlte", phone.Codename);
+
+        var checks = DeviceEligibility.Evaluate(phone);
+        Assert.False(checks.HasBlockers());
+        Assert.DoesNotContain(checks, c => c.Severity == CheckSeverity.Warning);
+        Assert.Equal("SM-G960F (starlte)", checks.Single(c => c.Id == "model").Detail);
+    }
+
+    [Fact]
+    public void GatesS9BootloaderVersion()
+    {
+        var snap = Snap(bootloader: "G960FXXUHFVG6", model: "SM-G960F");
+        Assert.Equal(CheckSeverity.Pass, DeviceEligibility.Evaluate(snap).Single(c => c.Id == "bootloader").Severity);
+        Assert.Equal(CheckSeverity.Blocker,
+            DeviceEligibility.Evaluate(Snap(bootloader: "G960FXXS9FVB1", model: "SM-G960F")).Single(c => c.Id == "bootloader").Severity);
     }
 
     [Theory]

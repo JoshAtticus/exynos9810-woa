@@ -81,12 +81,13 @@ public sealed class ToolsetManager
     public ToolsetConfig Config { get; }
     public bool WingetAvailable => _winget.WingetPath is not null;
 
-    public string TwrpPayload => Path.Combine(Paths.PayloadDirectory, "twrp-star2lte.img");
+    /// <summary>The chosen TWRP base (starlte for the S9, star2lte for the S9+).</summary>
+    public string TwrpPayload => Path.Combine(Paths.PayloadDirectory, "twrp.img");
     public string UefiPayload => Path.Combine(Paths.PayloadDirectory, "uefi.img");
     public string DriversPayload => Path.Combine(Paths.PayloadDirectory, "drivers");
 
     /// <summary>The WinRE recovery the installer actually flashes, built from the chosen TWRP.</summary>
-    public string TwrpWinrePayload => Path.Combine(Paths.PayloadDirectory, "twrp-winre-star2lte.img");
+    public string TwrpWinrePayload => Path.Combine(Paths.PayloadDirectory, "twrp-winre.img");
     private string TwrpWinreInfoPath => TwrpWinrePayload + ".json";
 
     /// <summary>
@@ -228,7 +229,7 @@ public sealed class ToolsetManager
         {
             return File.Exists(TwrpPayload)
                 ? ToolStatus.Missing("TWRP is selected but the WinRE recovery is not built yet. Press Set up automatically, or choose the TWRP image again.")
-                : ToolStatus.Missing("Open the TWRP page, download twrp-3.7.0_9-0-star2lte.img, then choose it here.");
+                : ToolStatus.Missing("Open the TWRP page, download twrp-3.7.0_9-0-starlte.img (S9) or -star2lte.img (S9+), then choose it here.");
         }
         if (info.Source == WinReRecoveryInfo.Prebuilt)
         {
@@ -241,7 +242,7 @@ public sealed class ToolsetManager
                     : $"Prebuilt WinRE recovery from this installer's current builder ({info.Builder}), with the UpdateOS gears.");
             }
             return ToolStatus.Ready(TwrpWinrePayload,
-                "Using a prebuilt WinRE-look recovery as-is. Choose the official twrp-3.7.0_9-0-star2lte.img to get this "
+                "Using a prebuilt WinRE-look recovery as-is. Choose the official twrp-3.7.0_9-0-starlte/star2lte.img to get this "
                 + "installer's recovery (repair tools and the install progress screen).");
         }
         if (info.Builder != WinReTwrpBuilder.BuilderVersion || (File.Exists(TwrpPayload) && TwrpBaseSha256() != info.BaseSha256))
@@ -303,9 +304,27 @@ public sealed class ToolsetManager
 
                 default:
                     return new ToolStatus(ToolState.Error,
-                        "This is not the official TWRP 3.7.0_9-0 for star2lte. Download twrp-3.7.0_9-0-star2lte.img "
+                        "This is not the official TWRP 3.7.0_9-0 for starlte/star2lte. Download twrp-3.7.0_9-0-starlte.img (S9) or -star2lte.img (S9+) "
                         + "from twrp.me and choose it, or pick a prebuilt WinRE recovery image.");
             }
+        }
+        catch (WinReBuildUnsupportedException e)
+        {
+            // The base is known-good but this builder can't reskin it (starlte kernel). Rather
+            // than block Setup, flash the official TWRP as-is: stock theme, stock power-off.
+            log?.Report($"{e.Message}");
+            log?.Report("Skipping the WinRE reskin: the official TWRP image is used as the recovery as-is.");
+            Directory.CreateDirectory(Path.GetDirectoryName(TwrpWinrePayload)!);
+            File.Copy(TwrpPayload, TwrpWinrePayload, overwrite: true);
+            new WinReRecoveryInfo
+            {
+                Builder = WinReRecoveryInfo.Prebuilt,
+                BaseSha256 = "",
+                Gears = "",
+                Source = WinReRecoveryInfo.Prebuilt,
+                Sha256 = Sha256File(TwrpWinrePayload),
+            }.Save(TwrpWinreInfoPath);
+            return Detect(Tools.Twrp);
         }
         catch (Exception e) when (e is InvalidOperationException or IOException or InvalidDataException)
         {

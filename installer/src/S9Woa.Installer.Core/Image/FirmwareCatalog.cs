@@ -16,6 +16,8 @@ public sealed record FirmwareImage
     [JsonPropertyName("mediaBuilds")] public IReadOnlyList<string> MediaBuilds { get; init; } = [];
     [JsonPropertyName("loaderSha256")] public required string LoaderSha256 { get; init; }
     [JsonPropertyName("kernelSha256")] public required string KernelSha256 { get; init; }
+    /// <summary>Phone this build boots: <c>starlte</c> (S9) or <c>star2lte</c> (S9+). Absent means star2lte.</summary>
+    [JsonPropertyName("device")] public string Device { get; init; } = "star2lte";
 }
 
 /// <summary>
@@ -98,22 +100,28 @@ public sealed class FirmwareCatalog
     /// because the firmware's boot-time adapters were written for one build and Windows may stop
     /// at the Samsung logo. Null only when the catalog is empty.
     /// </summary>
-    public FirmwareChoice? Choose(string? mediaBuild, string? loaderSha256 = null, string? kernelSha256 = null)
+    public FirmwareChoice? Choose(string? mediaBuild, string? loaderSha256 = null, string? kernelSha256 = null, string? device = null)
     {
-        if (Images.Count == 0)
+        var images = device is null or { Length: 0 }
+            ? Images
+            : Images.Where(i => i.Device.Equals(device, StringComparison.OrdinalIgnoreCase)).ToList();
+        if (images.Count == 0)
         {
             return null;
         }
-        if (loaderSha256 is not null && kernelSha256 is not null && ForBootFiles(loaderSha256, kernelSha256) is { } exact)
+        if (loaderSha256 is not null && kernelSha256 is not null
+            && images.FirstOrDefault(i => i.LoaderSha256.Equals(loaderSha256, StringComparison.OrdinalIgnoreCase)
+                                          && i.KernelSha256.Equals(kernelSha256, StringComparison.OrdinalIgnoreCase)) is { } exact)
         {
             return new FirmwareChoice(exact, true);
         }
-        if (loaderSha256 is null && mediaBuild is not null && ForMediaBuild(mediaBuild) is { } listed)
+        if (loaderSha256 is null && mediaBuild is not null
+            && images.FirstOrDefault(i => i.Windows == mediaBuild || i.MediaBuilds.Contains(mediaBuild)) is { } listed)
         {
             return new FirmwareChoice(listed, true);
         }
         var wanted = ParseBuild(mediaBuild);
-        var nearest = Images
+        var nearest = images
             .Select(i => (Image: i, Build: ParseBuild(i.MediaBuilds.Prepend(i.Windows).FirstOrDefault(b => wanted is { } w && ParseBuild(b)?.Major == w.Major) ?? i.Windows)))
             .OrderBy(x => wanted is { } w && x.Build is { } b && Family(b.Major) == Family(w.Major) ? 0 : 1)
             .ThenBy(x => wanted is { } w && x.Build is { } b && Family(b.Major) == Family(w.Major) ? Math.Abs(b.Revision - w.Revision) : 0)

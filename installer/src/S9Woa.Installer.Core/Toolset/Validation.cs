@@ -6,8 +6,10 @@ namespace S9Woa.Installer.Core.Toolset;
 /// <summary>Checks that a file is an Android boot image that fits a phone partition.</summary>
 public static class BootImage
 {
-    public const long RecoveryPartitionBytes = 16638L * 4096; // RECOVERY on star2lte (65 MiB).
-    public const long BootPartitionBytes = 14080L * 4096;     // BOOT on star2lte (55 MiB).
+    // PIT-verified identical on starlte (SM-G960F, STARLTE_EUR_OPEN.pit) and
+    // star2lte: same block counts, so one constant covers both models.
+    public const long RecoveryPartitionBytes = 16638L * 4096; // RECOVERY (65 MiB).
+    public const long BootPartitionBytes = 14080L * 4096;     // BOOT (55 MiB).
 
     private static readonly byte[] Magic = "ANDROID!"u8.ToArray();
 
@@ -38,14 +40,15 @@ public static class BootImage
         return null;
     }
 
-    /// <summary>TWRP must be the star2lte (Galaxy S9+ Exynos) build; official files end in -star2lte.img.</summary>
+    /// <summary>TWRP must be an Exynos Galaxy S9/S9+ build; official files end in -starlte.img (S9) or -star2lte.img (S9+).</summary>
     public static string? ValidateTwrp(string file)
     {
         var name = Path.GetFileName(file);
-        if (!name.Contains("star2lte", StringComparison.OrdinalIgnoreCase))
+        if (!name.Contains("starlte", StringComparison.OrdinalIgnoreCase)
+            && !name.Contains("star2lte", StringComparison.OrdinalIgnoreCase))
         {
-            return "This does not look like TWRP for the Galaxy S9+ (Exynos). Official file names end in -star2lte.img "
-                + "(not starlte, which is the S9, or star2qlte, which is the Snapdragon model).";
+            return "This does not look like TWRP for the Exynos Galaxy S9/S9+. Official file names end in -starlte.img "
+                + "(S9) or -star2lte.img (S9+), not starqlte/star2qlte (Snapdragon models).";
         }
         return Validate(file, RecoveryPartitionBytes);
     }
